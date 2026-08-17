@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Analyse Video</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="app">
+    <header>
+      <p class="eyebrow">AUDIO / VIDEO ANALYZER</p>
+      <h1>Analyse Video</h1>
+      <p class="subtitle">Colle une URL vidéo et visualise son énergie audio en temps réel.</p>
+    </header>
+
+    <section class="url-panel">
+      <label for="videoUrl">URL de la vidéo</label>
+      <div class="url-row">
+        <input id="videoUrl" type="url" placeholder="https://.../video.mp4" autocomplete="off">
+        <button id="loadButton" type="button">Charger</button>
+      </div>
+      <p id="status" class="status">En attente d'une vidéo.</p>
+    </section>
+
+    <section class="player-panel">
+      <video id="video" controls playsinline crossorigin="anonymous"></video>
+    </section>
+
+    <section class="analysis-panel">
+      <div class="panel-heading">
+        <div>
+          <p class="eyebrow">ANALYSE AUDIO</p>
+          <h2>Énergie sonore</h2>
+        </div>
+        <span id="peakCount" class="badge">0 pics</span>
+      </div>
+      <canvas id="audioGraph" aria-label="Graphique de l'intensité audio"></canvas>
+    </section>
+  </main>
+  <script src="app.js" defer></script>
+</body>
+</html>
