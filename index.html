@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Analyse Video</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="app">
+    <header>
+      <p class="eyebrow">AUDIO / VIDEO ANALYSIS</p>
+      <h1>Analyse Video</h1>
+      <p class="subtitle">Colle une URL de vidéo pour commencer l'analyse audio.</p>
+    </header>
+
+    <section class="url-panel">
+      <label for="videoUrl">URL de la vidéo</label>
+      <div class="url-row">
+        <input id="videoUrl" type="url" placeholder="https://..." autocomplete="off">
+        <button id="loadButton" type="button">Charger</button>
+      </div>
+      <p id="status" class="status">En attente d'une vidéo.</p>
+    </section>
+
+    <section class="player-panel">
+      <video id="video" controls playsinline crossorigin="anonymous"></video>
+    </section>
+
+    <section class="analysis-panel">
+      <div class="panel-heading">
+        <div>
+          <p class="eyebrow">LIVE</p>
+          <h2>Intensité sonore</h2>
+        </div>
+        <span id="peakCount" class="badge">0 pics</span>
+      </div>
+
+      <div class="meter-wrap">
+        <canvas id="audioGraph" aria-label="Graphique de l'intensité sonore"></canvas>
+        <div id="playhead" class="playhead"></div>
+      </div>
+
+      <div class="time-row">
+        <span id="currentTime">00:00</span>
+        <span id="duration">00:00</span>
+      </div>
+    </section>
+
+    <section class="events-panel">
+      <div class="panel-heading">
+        <div>
+          <p class="eyebrow">EVENTS</p>
+          <h2>Pics détectés</h2>
+        </div>
+      </div>
+      <div id="events" class="events-empty">Les événements apparaîtront pendant la lecture.</div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
