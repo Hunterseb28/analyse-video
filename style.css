@@ -1,0 +1,50 @@
+* { box-sizing: border-box; }
+
+:root {
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #f7f7fb;
+  background: #090a0f;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: radial-gradient(circle at 50% 0%, #20243a 0, #090a0f 48%, #050609 100%);
+}
+
+.app { width: min(1100px, 100%); margin: 0 auto; padding: 48px 20px 64px; }
+header { margin-bottom: 28px; }
+.eyebrow { margin: 0 0 8px; color: #8f98ff; font-size: 12px; font-weight: 800; letter-spacing: .16em; }
+h1 { margin: 0; font-size: clamp(36px, 7vw, 64px); line-height: 1; }
+.subtitle { color: #a6a9b8; margin: 14px 0 0; }
+
+.url-panel, .player-panel, .analysis-panel {
+  border: 1px solid #252838;
+  border-radius: 20px;
+  background: rgba(15, 17, 26, .82);
+  box-shadow: 0 20px 60px rgba(0,0,0,.22);
+}
+
+.url-panel { padding: 20px; margin-bottom: 18px; }
+label { display: block; margin-bottom: 9px; font-size: 13px; color: #b9bcc9; }
+.url-row { display: flex; gap: 10px; }
+input { flex: 1; min-width: 0; border: 1px solid #303448; border-radius: 12px; background: #090b12; color: white; padding: 14px 15px; outline: none; }
+input:focus { border-color: #727cff; }
+button { border: 0; border-radius: 12px; padding: 0 22px; background: #727cff; color: white; font-weight: 800; cursor: pointer; }
+button:hover { filter: brightness(1.08); }
+.status { margin: 10px 0 0; min-height: 18px; color: #858a9e; font-size: 13px; }
+
+.player-panel { overflow: hidden; margin-bottom: 18px; background: #050609; }
+video { display: block; width: 100%; max-height: 560px; background: #050609; }
+
+.analysis-panel { padding: 20px; }
+.panel-heading { display: flex; justify-content: space-between; align-items: center; gap: 15px; margin-bottom: 16px; }
+h2 { margin: 0; font-size: 22px; }
+.badge { border: 1px solid #34384d; border-radius: 999px; padding: 7px 10px; color: #b8bcff; font-size: 12px; }
+#audioGraph { display: block; width: 100%; height: 300px; border-radius: 14px; background: #090b12; }
+
+@media (max-width: 650px) {
+  .app { padding: 30px 12px 40px; }
+  .url-row { flex-direction: column; }
+  button { min-height: 48px; }
+}
