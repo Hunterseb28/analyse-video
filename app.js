@@ -10,6 +10,7 @@ const duration = document.getElementById('duration');
 const peakCount = document.getElementById('peakCount');
 const events = document.getElementById('events');
 
+const API_BASE = window.ANALYSE_API_URL || '';
 let audioContext;
 let analyser;
 let source;
@@ -37,11 +38,26 @@ function isDirectVideoUrl(value) {
   try {
     const url = new URL(value);
     if (!['http:', 'https:'].includes(url.protocol)) return false;
-    const pathname = url.pathname.toLowerCase();
-    return /\.(mp4|webm|ogg|ogv|mov|m4v)(?:$|\?)/.test(pathname + url.search);
+    return /\.(mp4|webm|ogg|ogv|mov|m4v)(?:$|\?)/i.test(url.pathname + url.search);
   } catch {
     return false;
   }
+}
+
+async function resolveVideoUrl(pageUrl) {
+  if (!API_BASE) {
+    throw new Error('API_NOT_CONFIGURED');
+  }
+
+  const endpoint = `${API_BASE.replace(/\/$/, '')}/api/resolve?url=${encodeURIComponent(pageUrl)}`;
+  const response = await fetch(endpoint);
+  const body = await response.json().catch(() => ({}));
+
+  if (!response.ok || !body.url) {
+    throw new Error(body.error || 'RESOLVE_FAILED');
+  }
+
+  return body.url;
 }
 
 function resizeCanvas() {
@@ -54,13 +70,11 @@ function resizeCanvas() {
 
 function setupAudio() {
   if (audioReady) return;
-
   audioContext = new (window.AudioContext || window.webkitAudioContext)();
   analyser = audioContext.createAnalyser();
   analyser.fftSize = 2048;
   analyser.smoothingTimeConstant = 0.72;
   data = new Uint8Array(analyser.fftSize);
-
   source = audioContext.createMediaElementSource(video);
   source.connect(analyser);
   analyser.connect(audioContext.destination);
@@ -91,8 +105,7 @@ function drawGraph(level = 0) {
     const index = Math.min(data.length - 1, x * step);
     const normalized = (data[index] - 128) / 128;
     const y = center + normalized * amplitude;
-    if (x === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
+    if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
   }
   ctx.strokeStyle = '#7d86ff';
   ctx.lineWidth = 1.5;
@@ -118,7 +131,6 @@ function detectPeak(level) {
   const now = video.currentTime;
   const threshold = 0.62;
   const cooldown = 0.28;
-
   if (level > threshold && level > lastPeakLevel && now - lastPeakTime > cooldown) {
     lastPeakTime = now;
     lastPeakLevel = level;
@@ -126,7 +138,6 @@ function detectPeak(level) {
     renderEvents();
     peakCount.textContent = `${peaks.length} pic${peaks.length > 1 ? 's' : ''}`;
   }
-
   lastPeakLevel *= 0.96;
 }
 
@@ -136,7 +147,6 @@ function renderEvents() {
     events.textContent = 'Les événements apparaîtront pendant la lecture.';
     return;
   }
-
   events.className = '';
   events.innerHTML = peaks.slice(-12).reverse().map((peak, index) => `
     <div class="event">
@@ -154,13 +164,10 @@ function animationLoop() {
       const value = (data[i] - 128) / 128;
       sum += value * value;
     }
-    const rms = Math.sqrt(sum / data.length);
-    const level = Math.min(1, rms * 3.2);
+    const level = Math.min(1, Math.sqrt(sum / data.length) * 3.2);
     detectPeak(level);
     drawGraph(level);
-  } else {
-    drawGraph();
-  }
+  } else drawGraph();
 
   if (video.duration) playhead.style.left = `${(video.currentTime / video.duration) * 100}%`;
   currentTime.textContent = formatTime(video.currentTime);
@@ -177,62 +184,66 @@ function resetAnalysis() {
   playhead.style.left = '0%';
 }
 
+async function loadResolvedVideo(playableUrl, originalUrl) {
+  resetAnalysis();
+  setupAudio();
+  video.src = playableUrl;
+  video.load();
+  loadedUrl = originalUrl;
+
+  await new Promise((resolve, reject) => {
+    const onLoaded = () => { cleanup(); resolve(); };
+    const onError = () => { cleanup(); reject(new Error('VIDEO_LOAD_ERROR')); };
+    const cleanup = () => {
+      video.removeEventListener('loadedmetadata', onLoaded);
+      video.removeEventListener('error', onError);
+    };
+    video.addEventListener('loadedmetadata', onLoaded, { once: true });
+    video.addEventListener('error', onError, { once: true });
+  });
+
+  setStatus('Vidéo prête. Lance la lecture pour analyser le son.');
+  duration.textContent = formatTime(video.duration);
+  resizeCanvas();
+  cancelAnimationFrame(animationFrame);
+  animationLoop();
+}
+
 async function loadVideo() {
   const url = videoUrl.value.trim();
-
-  if (!url) {
-    setStatus('Colle une URL directe de vidéo.', true);
-    return;
-  }
-
-  if (!isDirectVideoUrl(url)) {
-    setStatus('Cette V1 accepte uniquement les URL directes .mp4, .webm, .ogg, .ogv, .mov ou .m4v.', true);
-    return;
-  }
-
-  if (url === loadedUrl) {
-    video.currentTime = 0;
-    await video.play().catch(() => {});
-    return;
-  }
+  if (!url) return setStatus('Colle une URL de vidéo.', true);
 
   try {
-    setStatus('Chargement de la vidéo…');
-    resetAnalysis();
-    setupAudio();
-    video.src = url;
-    video.load();
-    loadedUrl = url;
+    setStatus('Analyse de l’URL…');
+    if (url === loadedUrl) {
+      video.currentTime = 0;
+      await video.play().catch(() => {});
+      return;
+    }
 
-    await new Promise((resolve, reject) => {
-      const onLoaded = () => { cleanup(); resolve(); };
-      const onError = () => { cleanup(); reject(new Error('VIDEO_LOAD_ERROR')); };
-      const cleanup = () => {
-        video.removeEventListener('loadedmetadata', onLoaded);
-        video.removeEventListener('error', onError);
-      };
-      video.addEventListener('loadedmetadata', onLoaded, { once: true });
-      video.addEventListener('error', onError, { once: true });
-    });
+    let playableUrl = url;
+    if (!isDirectVideoUrl(url)) {
+      setStatus('Cette URL est une page. Recherche du flux vidéo…');
+      playableUrl = await resolveVideoUrl(url);
+    }
 
-    setStatus('Vidéo prête. Lance la lecture pour analyser le son.');
-    duration.textContent = formatTime(video.duration);
-    resizeCanvas();
-    cancelAnimationFrame(animationFrame);
-    animationLoop();
+    await loadResolvedVideo(playableUrl, url);
   } catch (error) {
     console.error(error);
     loadedUrl = '';
     video.removeAttribute('src');
     video.load();
-    setStatus('Impossible de charger cette URL. Le serveur de la vidéo doit autoriser CORS et fournir un format lisible par le navigateur.', true);
+
+    if (error.message === 'API_NOT_CONFIGURED') {
+      setStatus('Le serveur d’analyse n’est pas encore connecté. Il faut déployer le dossier server et renseigner son URL.', true);
+    } else {
+      setStatus('Impossible de récupérer cette vidéo. Le site source peut bloquer l’extraction ou nécessiter une autorisation.', true);
+    }
   }
 }
 
 loadButton.addEventListener('click', loadVideo);
-videoUrl.addEventListener('keydown', event => {
-  if (event.key === 'Enter') loadVideo();
-});
+videoUrl.addEventListener('keydown', event => { if (event.key === 'Enter') loadVideo(); });
 
 video.addEventListener('play', async () => {
   try {
@@ -247,10 +258,6 @@ video.addEventListener('play', async () => {
 video.addEventListener('loadedmetadata', () => {
   duration.textContent = formatTime(video.duration);
   resizeCanvas();
-});
-
-video.addEventListener('error', () => {
-  if (video.src) setStatus('La vidéo ne peut pas être lue. Vérifie que l’URL pointe directement vers un fichier vidéo et que le serveur autorise CORS.', true);
 });
 
 window.addEventListener('resize', resizeCanvas);
