@@ -19,6 +19,7 @@ let peaks = [];
 let lastPeakTime = -Infinity;
 let lastPeakLevel = 0;
 let audioReady = false;
+let loadedUrl = '';
 
 function formatTime(seconds) {
   if (!Number.isFinite(seconds)) return '00:00';
@@ -30,6 +31,17 @@ function formatTime(seconds) {
 function setStatus(message, error = false) {
   status.textContent = message;
   status.style.color = error ? '#ff7b91' : '';
+}
+
+function isDirectVideoUrl(value) {
+  try {
+    const url = new URL(value);
+    if (!['http:', 'https:'].includes(url.protocol)) return false;
+    const pathname = url.pathname.toLowerCase();
+    return /\.(mp4|webm|ogg|ogv|mov|m4v)(?:$|\?)/.test(pathname + url.search);
+  } catch {
+    return false;
+  }
 }
 
 function resizeCanvas() {
@@ -70,7 +82,7 @@ function drawGraph(level = 0) {
   }
 
   analyser.getByteTimeDomainData(data);
-  const step = Math.max(1, Math.floor(data.length / width));
+  const step = Math.max(1, Math.floor(data.length / Math.max(1, width)));
   const center = height / 2;
   const amplitude = Math.max(8, (height / 2 - 12) * (0.15 + level * 1.15));
 
@@ -86,7 +98,6 @@ function drawGraph(level = 0) {
   ctx.lineWidth = 1.5;
   ctx.stroke();
 
-  // Current intensity marker.
   const barHeight = level * (height - 24);
   ctx.fillStyle = 'rgba(125,134,255,.12)';
   ctx.fillRect(0, height - 12 - barHeight, width, barHeight);
@@ -151,54 +162,97 @@ function animationLoop() {
     drawGraph();
   }
 
-  if (video.duration) {
-    playhead.style.left = `${(video.currentTime / video.duration) * 100}%`;
-  }
+  if (video.duration) playhead.style.left = `${(video.currentTime / video.duration) * 100}%`;
   currentTime.textContent = formatTime(video.currentTime);
   duration.textContent = formatTime(video.duration);
   animationFrame = requestAnimationFrame(animationLoop);
 }
 
+function resetAnalysis() {
+  peaks = [];
+  lastPeakTime = -Infinity;
+  lastPeakLevel = 0;
+  peakCount.textContent = '0 pics';
+  renderEvents();
+  playhead.style.left = '0%';
+}
+
 async function loadVideo() {
   const url = videoUrl.value.trim();
+
   if (!url) {
-    setStatus('Colle une URL de vidéo.', true);
+    setStatus('Colle une URL directe de vidéo.', true);
+    return;
+  }
+
+  if (!isDirectVideoUrl(url)) {
+    setStatus('Cette V1 accepte uniquement les URL directes .mp4, .webm, .ogg, .ogv, .mov ou .m4v.', true);
+    return;
+  }
+
+  if (url === loadedUrl) {
+    video.currentTime = 0;
+    await video.play().catch(() => {});
     return;
   }
 
   try {
-    if (audioContext && audioContext.state === 'suspended') await audioContext.resume();
+    setStatus('Chargement de la vidéo…');
+    resetAnalysis();
     setupAudio();
     video.src = url;
     video.load();
-    peaks = [];
-    lastPeakTime = -Infinity;
-    lastPeakLevel = 0;
-    peakCount.textContent = '0 pics';
-    renderEvents();
-    setStatus('Vidéo chargée. Lance la lecture pour analyser le son.');
+    loadedUrl = url;
+
+    await new Promise((resolve, reject) => {
+      const onLoaded = () => { cleanup(); resolve(); };
+      const onError = () => { cleanup(); reject(new Error('VIDEO_LOAD_ERROR')); };
+      const cleanup = () => {
+        video.removeEventListener('loadedmetadata', onLoaded);
+        video.removeEventListener('error', onError);
+      };
+      video.addEventListener('loadedmetadata', onLoaded, { once: true });
+      video.addEventListener('error', onError, { once: true });
+    });
+
+    setStatus('Vidéo prête. Lance la lecture pour analyser le son.');
+    duration.textContent = formatTime(video.duration);
+    resizeCanvas();
     cancelAnimationFrame(animationFrame);
     animationLoop();
   } catch (error) {
     console.error(error);
-    setStatus('Impossible d’analyser cette vidéo. Vérifie notamment les permissions CORS.', true);
+    loadedUrl = '';
+    video.removeAttribute('src');
+    video.load();
+    setStatus('Impossible de charger cette URL. Le serveur de la vidéo doit autoriser CORS et fournir un format lisible par le navigateur.', true);
   }
 }
 
 loadButton.addEventListener('click', loadVideo);
+videoUrl.addEventListener('keydown', event => {
+  if (event.key === 'Enter') loadVideo();
+});
+
 video.addEventListener('play', async () => {
   try {
     setupAudio();
     if (audioContext.state === 'suspended') await audioContext.resume();
   } catch (error) {
     console.error(error);
+    setStatus('Le navigateur ne permet pas l’analyse audio de cette vidéo.', true);
   }
 });
+
 video.addEventListener('loadedmetadata', () => {
   duration.textContent = formatTime(video.duration);
   resizeCanvas();
 });
-window.addEventListener('resize', resizeCanvas);
 
+video.addEventListener('error', () => {
+  if (video.src) setStatus('La vidéo ne peut pas être lue. Vérifie que l’URL pointe directement vers un fichier vidéo et que le serveur autorise CORS.', true);
+});
+
+window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 drawGraph();
