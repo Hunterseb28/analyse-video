@@ -1,0 +1,29 @@
+name: Package Safari extension
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'safari-extension/**'
+      - '.github/workflows/package-safari-extension.yml'
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create extension ZIP
+        run: |
+          cd safari-extension
+          zip -r ../analyse-video-safari-extension.zip manifest.json content.js overlay.css
+
+      - name: Upload ZIP artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: analyse-video-safari-extension
+          path: analyse-video-safari-extension.zip
+          if-no-files-found: error
